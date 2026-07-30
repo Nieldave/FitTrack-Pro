@@ -1,0 +1,6 @@
+{
+  "name": "FitTrack Pro",
+  "description": "Enterprise workout management application with exercise library, workout builder, progress analytics, AI workout generator, and admin management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
