@@ -4,10 +4,9 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class FittrackproApplication {
+public class FitTrackProApplication {
 
-	public static void main(String[] args) {
-		SpringApplication.run(FittrackproApplication.class, args);
-	}
-
+    public static void main(String[] args) {
+        SpringApplication.run(FitTrackProApplication.class, args);
+    }
 }
