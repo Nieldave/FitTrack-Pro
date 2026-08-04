@@ -1,6 +1,8 @@
 package com.nieldave.fittrackpro.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -20,6 +22,7 @@ import java.util.stream.Collectors;
  * ever have its own try/catch for these - this class is the single
  * source of truth for how errors look on the wire.
  */
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -60,12 +63,32 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGeneric(Exception ex, HttpServletRequest request) {
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred", request, null);
+    public ResponseEntity<ErrorResponse> handleGeneric(
+            Exception ex,
+            HttpServletRequest request) {
+
+        log.error(
+                "Unhandled exception on {} {}",
+                request.getMethod(),
+                request.getRequestURI(),
+                ex);
+
+        return build(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "An unexpected error occurred",
+                request,
+                null);
     }
 
     private ResponseEntity<ErrorResponse> build(HttpStatus status, String message,
                                                  HttpServletRequest request, Map<String, String> fieldErrors) {
+
+        log.debug("{} {} -> {} {}",
+                request.getMethod(),
+                request.getRequestURI(),
+                status.value(),
+                message);
+
         ErrorResponse body = ErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(status.value())

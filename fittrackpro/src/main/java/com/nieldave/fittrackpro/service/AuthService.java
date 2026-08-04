@@ -12,6 +12,7 @@ import com.nieldave.fittrackpro.repository.UserRepository;
 import com.nieldave.fittrackpro.security.CustomUserDetails;
 import com.nieldave.fittrackpro.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -19,6 +20,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -37,6 +39,7 @@ public class AuthService {
         String normalizedEmail = request.getEmail().trim().toLowerCase();
 
         if (userRepository.existsByEmail(normalizedEmail)) {
+            log.warn("Register rejected - email already exists: {}", normalizedEmail);
             throw new DuplicateResourceException("An account with this email already exists");
         }
 
@@ -49,8 +52,9 @@ public class AuthService {
                 .build();
 
         User saved = userRepository.save(user);
-        CustomUserDetails userDetails = new CustomUserDetails(saved);
+        log.info("Persisted new user id={} email={} to database", saved.getId(), saved.getEmail());
 
+        CustomUserDetails userDetails = new CustomUserDetails(saved);
         return buildAuthResponse(userDetails, saved);
     }
 
@@ -62,11 +66,17 @@ public class AuthService {
                     new UsernamePasswordAuthenticationToken(normalizedEmail, request.getPassword())
             );
         } catch (BadCredentialsException e) {
+            log.warn("Login failed - bad credentials for email={}", normalizedEmail);
             throw new InvalidCredentialsException("Invalid email or password");
         }
 
         User user = userRepository.findByEmail(normalizedEmail)
-                .orElseThrow(() -> new InvalidCredentialsException("Invalid email or password"));
+                .orElseThrow(() -> {
+                    log.warn("Login failed - no user row for email={}", normalizedEmail);
+                    return new InvalidCredentialsException("Invalid email or password");
+                });
+
+        log.info("Login authenticated against database - userId={} email={}", user.getId(), user.getEmail());
 
         CustomUserDetails userDetails = new CustomUserDetails(user);
         return buildAuthResponse(userDetails, user);
@@ -77,25 +87,37 @@ public class AuthService {
         String tokenType = jwtUtil.extractTokenType(token);
 
         if (!"refresh".equals(tokenType)) {
+            log.warn("Refresh rejected - wrong token type: {}", tokenType);
             throw new InvalidCredentialsException("Invalid token type - a refresh token is required");
         }
 
         String email = jwtUtil.extractEmail(token);
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new InvalidCredentialsException("Invalid refresh token"));
+                .orElseThrow(() -> {
+                    log.warn("Refresh failed - no user row for email={}", email);
+                    return new InvalidCredentialsException("Invalid refresh token");
+                });
 
         CustomUserDetails userDetails = new CustomUserDetails(user);
 
         if (!jwtUtil.isTokenValid(token, userDetails)) {
+            log.warn("Refresh failed - token invalid or expired for userId={}", user.getId());
             throw new InvalidCredentialsException("Refresh token is invalid or expired");
         }
 
+        log.info("Refresh succeeded for userId={}", user.getId());
         return buildAuthResponse(userDetails, user);
     }
 
     private AuthResponse buildAuthResponse(CustomUserDetails userDetails, User user) {
+        // Never log request.getPassword(), the generated accessToken, or the
+        // refreshToken - only non-sensitive identifiers (userId/email/role).
+        log.debug("Generating JWT tokens for user={}", user.getEmail());
+
         String accessToken = jwtUtil.generateAccessToken(userDetails, user.getId(), user.getRole().name());
         String refreshToken = jwtUtil.generateRefreshToken(userDetails);
+
+        log.info("JWT issued successfully for userId={}", user.getId());
 
         return AuthResponse.builder()
                 .accessToken(accessToken)
